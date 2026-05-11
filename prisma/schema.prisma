@@ -1,0 +1,817 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id           String   @id @default(uuid())
+  businessName String
+  tradeName    String?
+  document     String   @unique
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+  
+  users        User[]
+  branches     Branch[]
+  roles        Role[]
+  products     Product[]
+  productTypes ProductType[]
+  productCategories ProductCategory[]
+  stockLocations StockLocation[]
+  stockMovements StockMovement[]
+  stockSnapshots StockSnapshot[]
+  cashSessions   CashRegisterSession[]
+  sales          Sale[]
+  financialAccounts FinancialAccount[]
+  financialCategories FinancialCategory[]
+  costCenters    CostCenter[]
+  financialTransactions FinancialTransaction[]
+  accountsPayable AccountPayable[]
+  accountsReceivable AccountReceivable[]
+  customers      Customer[]
+  suppliers      Supplier[]
+  paymentAllocations PaymentAllocation[]
+  installmentGroups InstallmentGroup[]
+  financialDocuments FinancialDocument[]
+  customerCredits CustomerCredit[]
+  notifications   Notification[]
+  reportExports   ReportExport[]
+  dailySnapshots  DailySnapshot[]
+  anomalyAlerts   AnomalyAlert[]
+  productPriceHistories ProductPriceHistory[]
+  auditLogs       AuditLog[]
+  tasks           Task[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  companyId    String
+  name         String
+  email        String
+  passwordHash String
+  
+  roleId       String?
+  role         Role?    @relation(fields: [roleId], references: [id])
+  roleName     String   @default("EMPLOYEE")
+  permissions  String?  // JSON string for user-level permission overrides
+  
+  branchId     String?
+  branch       Branch?  @relation(fields: [branchId], references: [id])
+  
+  requirePasswordChange Boolean @default(true)
+  mfaEnabled            Boolean @default(false)
+  expiresAt             DateTime?
+  
+  department            String?
+  position              String?
+  phone                 String?
+  avatarUrl             String?
+
+  lastLoginAt           DateTime?
+  lastIp                String?
+
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+  
+  company      Company  @relation(fields: [companyId], references: [id])
+  refreshTokens RefreshToken[]
+  stockMovements StockMovement[]
+  cashSessions   CashRegisterSession[]
+  sales          Sale[]
+  financialTransactions FinancialTransaction[]
+  productPriceHistories ProductPriceHistory[]
+  reportExports  ReportExport[]
+  auditLogs      AuditLog[]
+  createdTasks   Task[]   @relation("TaskCreator")
+  assignedTasks  Task[]   @relation("TaskAssignee")
+  taskActivities TaskActivity[]
+  completedChecklistItems TaskChecklistItem[]
+  taskAttachments TaskAttachment[]
+
+  @@unique([email, companyId])
+}
+
+model Branch {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  users       User[]
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  permissions RolePermission[]
+  users       User[]
+
+  @@map("roles")
+}
+
+model RolePermission {
+  id            String   @id @default(uuid())
+  roleId        String
+  permissionKey String
+  
+  role          Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionKey])
+  @@map("role_permissions")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Product {
+  id                 String   @id @default(uuid())
+  companyId          String
+  name               String
+  sku                String?
+  barcode            String?
+  price              Float
+  costPrice          Float?
+  margin             Float?
+  unit               String   @default("UN")
+  type               String   @default("PRODUCT") // legacy text field, keep for fallback
+  productTypeId      String?
+  categoryId         String?
+  ncm                String?
+  cest               String?
+  cfop               String?
+  notes              String?
+  minStock           Float    @default(0)
+  allowNegativeStock Boolean  @default(false)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  deletedAt          DateTime?
+  
+  productType        ProductType?     @relation(fields: [productTypeId], references: [id])
+  category           ProductCategory? @relation(fields: [categoryId], references: [id])
+  company            Company  @relation(fields: [companyId], references: [id])
+  stockMovements StockMovement[]
+  stockSnapshots StockSnapshot[]
+  saleItems      SaleItem[]
+  priceHistories ProductPriceHistory[]
+}
+
+model StockLocation {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  movements   StockMovement[]
+  snapshots   StockSnapshot[]
+}
+
+model StockMovement {
+  id            String   @id @default(uuid())
+  companyId     String
+  productId     String
+  locationId    String
+  userId        String
+  type          String   // "IN", "OUT", "ADJUSTMENT"
+  quantity      Float    // Positive for IN, negative for OUT
+  unitCost      Float?   
+  reference     String?  // e.g. Sale ID or Invoice ID
+  notes         String?
+  createdAt     DateTime @default(now())
+  
+  company       Company  @relation(fields: [companyId], references: [id])
+  product       Product  @relation(fields: [productId], references: [id])
+  location      StockLocation @relation(fields: [locationId], references: [id])
+  user          User     @relation(fields: [userId], references: [id])
+  
+  @@index([companyId, productId, locationId])
+  @@index([companyId, type])
+}
+
+model StockSnapshot {
+  id          String   @id @default(uuid())
+  companyId   String
+  productId   String
+  locationId  String
+  quantity    Float    @default(0)
+  lastCost    Float?
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  product     Product  @relation(fields: [productId], references: [id])
+  location    StockLocation @relation(fields: [locationId], references: [id])
+  
+  @@unique([companyId, productId, locationId])
+  @@index([companyId, quantity])
+}
+
+model CashRegisterSession {
+  id           String   @id @default(uuid())
+  companyId    String
+  userId       String
+  openedAt     DateTime @default(now())
+  closedAt     DateTime?
+  initialBalance Float   @default(0)
+  finalBalance   Float?
+  status       String   // "OPEN", "CLOSED"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  company      Company  @relation(fields: [companyId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
+  movements    CashMovement[]
+  sales        Sale[]
+}
+
+model CashMovement {
+  id           String   @id @default(uuid())
+  sessionId    String
+  type         String   // "SUPPLY" (suprimento), "WITHDRAW" (sangria), "SALE"
+  amount       Float
+  description  String?
+  createdAt    DateTime @default(now())
+  
+  session      CashRegisterSession @relation(fields: [sessionId], references: [id])
+  
+  saleId       String?
+  sale         Sale?    @relation(fields: [saleId], references: [id])
+}
+
+model Sale {
+  id               String   @id @default(uuid())
+  companyId        String
+  sessionId        String
+  userId           String
+  customerId       String? // Optional for anonymous sales
+  totalAmount      Float
+  discountAmount   Float    @default(0)
+  netAmount        Float
+  status           String   // "COMPLETED", "CANCELED"
+  createdAt        DateTime @default(now())
+  cancelReason     String?
+  canceledAt       DateTime?
+
+  company          Company  @relation(fields: [companyId], references: [id])
+  session          CashRegisterSession @relation(fields: [sessionId], references: [id])
+  user             User     @relation(fields: [userId], references: [id])
+  customer         Customer? @relation(fields: [customerId], references: [id])
+  items            SaleItem[]
+  payments         SalePayment[]
+  cashMovements    CashMovement[]
+}
+
+model SaleItem {
+  id                 String   @id @default(uuid())
+  saleId             String
+  productId          String
+  quantity           Float
+  unitPrice          Float
+  discount           Float    @default(0)
+  netPrice           Float
+  total              Float
+  productNameSnapshot String // immutable snapshot
+  skuSnapshot        String?
+  
+  sale         Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product      Product  @relation(fields: [productId], references: [id])
+}
+
+model SalePayment {
+  id           String   @id @default(uuid())
+  saleId       String
+  method       String   // "CASH", "CREDIT_CARD", "DEBIT_CARD", "PIX"
+  amount       Float
+  
+  sale         Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+}
+
+model FinancialAccount {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  type        String   // "BANK_ACCOUNT", "CASH", "CREDIT_CARD"
+  isActive    Boolean  @default(true)
+  balance     Float    @default(0) // Materialized view
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  transactions FinancialTransaction[]
+  payables    AccountPayable[]
+  receivables AccountReceivable[]
+}
+
+model FinancialCategory {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  type        String   // "INCOME", "EXPENSE"
+  parentId    String?
+  isActive    Boolean  @default(true)
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  parent      FinancialCategory? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    FinancialCategory[] @relation("CategoryHierarchy")
+  transactions FinancialTransaction[]
+  payables    AccountPayable[]
+  receivables AccountReceivable[]
+}
+
+model CostCenter {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  isActive    Boolean  @default(true)
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  transactions FinancialTransaction[]
+  payables    AccountPayable[]
+  receivables AccountReceivable[]
+}
+
+model AccountPayable {
+  id              String   @id @default(uuid())
+  companyId       String
+  supplierId      String?
+  description     String
+  categoryId      String?
+  costCenterId    String?
+  installmentGroupId String?
+  installmentNumber Int?
+  amount          Float
+  paidAmount      Float    @default(0)
+  discountAmount  Float    @default(0)
+  interestAmount  Float    @default(0)
+  penaltyAmount   Float    @default(0)
+  dueDate         DateTime
+  accrualDate     DateTime? // Data de Competência
+  issueDate       DateTime? // Data de Emissão
+  paidDate        DateTime?
+  status          String   // "OPEN", "PARTIAL", "OVERDUE", "PAID", "CANCELLED"
+  reference       String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  accountId       String?
+
+  company         Company  @relation(fields: [companyId], references: [id])
+  supplier        Supplier? @relation(fields: [supplierId], references: [id])
+  category        FinancialCategory?  @relation(fields: [categoryId], references: [id])
+  costCenter      CostCenter?  @relation(fields: [costCenterId], references: [id])
+  account         FinancialAccount? @relation(fields: [accountId], references: [id])
+  installmentGroup InstallmentGroup? @relation(fields: [installmentGroupId], references: [id])
+  transactions    FinancialTransaction[]
+  allocations     PaymentAllocation[]
+  documents       FinancialDocument[]
+}
+
+model AccountReceivable {
+  id              String   @id @default(uuid())
+  companyId       String
+  customerId      String?
+  description     String
+  categoryId      String?
+  costCenterId    String?
+  installmentGroupId String?
+  installmentNumber Int?
+  amount          Float
+  receivedAmount  Float    @default(0)
+  discountAmount  Float    @default(0)
+  interestAmount  Float    @default(0)
+  penaltyAmount   Float    @default(0)
+  dueDate         DateTime
+  accrualDate     DateTime? // Data de Competência
+  issueDate       DateTime? // Data de Emissão
+  receivedDate    DateTime?
+  status          String   // "OPEN", "PARTIAL", "OVERDUE", "PAID", "CANCELLED"
+  reference       String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  accountId       String?
+
+  company         Company  @relation(fields: [companyId], references: [id])
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  category        FinancialCategory?  @relation(fields: [categoryId], references: [id])
+  costCenter      CostCenter?  @relation(fields: [costCenterId], references: [id])
+  account         FinancialAccount? @relation(fields: [accountId], references: [id])
+  installmentGroup InstallmentGroup? @relation(fields: [installmentGroupId], references: [id])
+  transactions    FinancialTransaction[]
+  allocations     PaymentAllocation[]
+  documents       FinancialDocument[]
+}
+
+model FinancialTransaction {
+  id              String   @id @default(uuid())
+  companyId       String
+  accountId       String
+  userId          String
+  type            String   // "INCOME", "EXPENSE", "TRANSFER", "ADJUSTMENT"
+  amount          Float    // Signed: > 0 Income, < 0 Expense
+  categoryId      String?
+  costCenterId    String?
+  payableId       String?
+  receivableId    String?
+  description     String
+  reference       String? // e.g. "SALE:123"
+  createdAt       DateTime @default(now())
+
+  company         Company  @relation(fields: [companyId], references: [id])
+  account         FinancialAccount  @relation(fields: [accountId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
+  category        FinancialCategory?  @relation(fields: [categoryId], references: [id])
+  costCenter      CostCenter?  @relation(fields: [costCenterId], references: [id])
+  payable         AccountPayable? @relation(fields: [payableId], references: [id])
+  receivable      AccountReceivable? @relation(fields: [receivableId], references: [id])
+  allocations     PaymentAllocation[]
+  documents       FinancialDocument[]
+  
+  @@index([companyId, accountId])
+  @@index([companyId, type])
+  @@index([companyId, createdAt])
+}
+
+model Customer {
+  id                    String   @id @default(uuid())
+  companyId             String
+  name                  String
+  businessName          String?
+  document              String?  // CPF/CNPJ
+  email                 String?
+  mobilePhone           String?
+  landline              String?
+  
+  // Address
+  zipCode               String?
+  street                String?
+  number                String?
+  complement            String?
+  neighborhood          String?
+  city                  String?
+  state                 String?
+
+  // Additional Data
+  stateRegistration     String?
+  municipalRegistration String?
+  birthDate             DateTime?
+  tags                  String?
+  notes                 String?
+
+  // Financial
+  priceTableId          String?
+  allowedPaymentMethods String?
+
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  company               Company  @relation(fields: [companyId], references: [id])
+  receivables           AccountReceivable[]
+  credit                CustomerCredit?
+  sales                 Sale[]
+}
+
+model Supplier {
+  id                    String   @id @default(uuid())
+  companyId             String
+  name                  String
+  businessName          String?
+  document              String?  // CNPJ
+  email                 String?
+  mobilePhone           String?
+  landline              String?
+
+  // Address
+  zipCode               String?
+  street                String?
+  number                String?
+  complement            String?
+  neighborhood          String?
+  city                  String?
+  state                 String?
+
+  // Additional Data
+  stateRegistration     String?
+  municipalRegistration String?
+  foundationDate        DateTime?
+  tags                  String?
+  notes                 String?
+
+  // Purchasing & Financial
+  pixKey                String?
+  bankAccount           String?
+  category              String?
+  averageDeliveryTime   Int?
+  contractUrl           String?
+
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  company               Company  @relation(fields: [companyId], references: [id])
+  payables              AccountPayable[]
+}
+
+model PaymentAllocation {
+  id              String   @id @default(uuid())
+  companyId       String
+  transactionId   String
+  payableId       String?
+  receivableId    String?
+  amount          Float
+  discountAmount  Float    @default(0)
+  interestAmount  Float    @default(0)
+  penaltyAmount   Float    @default(0)
+  createdAt       DateTime @default(now())
+
+  company         Company  @relation(fields: [companyId], references: [id])
+  transaction     FinancialTransaction  @relation(fields: [transactionId], references: [id])
+  payable         AccountPayable? @relation(fields: [payableId], references: [id])
+  receivable      AccountReceivable? @relation(fields: [receivableId], references: [id])
+  
+  @@index([companyId, transactionId])
+  @@index([companyId, payableId])
+  @@index([companyId, receivableId])
+}
+
+model InstallmentGroup {
+  id              String   @id @default(uuid())
+  companyId       String
+  reference       String?
+  totalAmount     Float
+  installments    Int
+  createdAt       DateTime @default(now())
+
+  company         Company  @relation(fields: [companyId], references: [id])
+  payables        AccountPayable[]
+  receivables     AccountReceivable[]
+}
+
+model FinancialDocument {
+  id              String   @id @default(uuid())
+  companyId       String
+  payableId       String?
+  receivableId    String?
+  transactionId   String?
+  title           String
+  fileUrl         String
+  fileType        String
+  createdAt       DateTime @default(now())
+
+  company         Company  @relation(fields: [companyId], references: [id])
+  payable         AccountPayable? @relation(fields: [payableId], references: [id])
+  receivable      AccountReceivable? @relation(fields: [receivableId], references: [id])
+  transaction     FinancialTransaction? @relation(fields: [transactionId], references: [id])
+}
+
+model CustomerCredit {
+  id              String   @id @default(uuid())
+  customerId      String   @unique
+  companyId       String
+  creditLimit     Float    @default(0)
+  usedCredit      Float    @default(0)
+  internalScore   Int      @default(0)
+  isBlocked       Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+
+  customer        Customer @relation(fields: [customerId], references: [id])
+  company         Company  @relation(fields: [companyId], references: [id])
+}
+
+model Notification {
+  id              String   @id @default(uuid())
+  companyId       String
+  title           String
+  message         String
+  type            String   // "INFO", "WARNING", "ERROR", "SUCCESS"
+  isRead          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  company         Company  @relation(fields: [companyId], references: [id])
+}
+
+model ReportExport {
+  id                String   @id @default(uuid())
+  companyId         String
+  requestedByUserId String
+  type              String   // "FINANCIAL_LEDGER", "INVENTORY_VALUATION", etc
+  format            String   // "PDF", "XLSX"
+  status            String   @default("QUEUED") // "QUEUED", "PROCESSING", "COMPLETED", "FAILED", "EXPIRED"
+  filters           String?
+  storageKey        String?
+  downloadUrl       String?
+  fileSize          Int?
+  errorMessage      String?
+  expiresAt         DateTime?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  company           Company  @relation(fields: [companyId], references: [id])
+  user              User     @relation(fields: [requestedByUserId], references: [id])
+}
+
+model DailySnapshot {
+  id              String   @id @default(uuid())
+  companyId       String
+  date            DateTime
+  revenue         Float    @default(0)
+  expenses        Float    @default(0)
+  cashBalance     Float    @default(0)
+  salesCount      Int      @default(0)
+  ticketAverage   Float    @default(0)
+  stockValuation  Float    @default(0)
+  createdAt       DateTime @default(now())
+
+  company         Company  @relation(fields: [companyId], references: [id])
+  
+  @@unique([companyId, date])
+}
+
+model AnomalyAlert {
+  id              String   @id @default(uuid())
+  companyId       String
+  type            String   // "SALES_DROP", "HIGH_DISCOUNT", "EXPENSE_SPIKE"
+  severity        String   // "LOW", "MEDIUM", "HIGH", "CRITICAL"
+  message         String
+  metadata        String?
+  isResolved      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  resolvedAt      DateTime?
+
+  company         Company  @relation(fields: [companyId], references: [id])
+}
+
+model ProductCategory {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  products    Product[]
+}
+
+model ProductType {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  slug        String
+  color       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  company     Company  @relation(fields: [companyId], references: [id])
+  products    Product[]
+}
+
+model ProductPriceHistory {
+  id              String   @id @default(uuid())
+  companyId       String
+  productId       String
+  userId          String
+  oldCost         Float?
+  newCost         Float?
+  oldPrice        Float // alias for salePrice
+  newPrice        Float
+  percentageApplied Float?
+  reason          String?
+  createdAt       DateTime @default(now())
+
+  company         Company  @relation(fields: [companyId], references: [id])
+  product         Product  @relation(fields: [productId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  companyId   String
+  userId      String?
+  action      String
+  entity      String?
+  entityId    String?
+  details     String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  company     Company  @relation(fields: [companyId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id])
+}
+
+model Task {
+  id              String        @id @default(uuid())
+  companyId       String
+  title           String
+  description     String?
+  status          String        @default("PENDING") // PENDING, IN_PROGRESS, WAITING, COMPLETED, CANCELLED, OVERDUE
+  priority        String        @default("MEDIUM")  // LOW, MEDIUM, HIGH, URGENT
+  createdByUserId String
+  assignedToUserId String?
+  sectorId        String?
+  dueDate         DateTime?
+  completedAt     DateTime?
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  // Relations
+  company         Company       @relation(fields: [companyId], references: [id])
+  createdByUser   User          @relation("TaskCreator", fields: [createdByUserId], references: [id])
+  assignedToUser  User?         @relation("TaskAssignee", fields: [assignedToUserId], references: [id])
+  activities      TaskActivity[]
+  checklist       TaskChecklistItem[]
+  attachments     TaskAttachment[]
+
+  @@map("tasks")
+}
+
+model TaskActivity {
+  id          String   @id @default(uuid())
+  taskId      String
+  userId      String
+  type        String   // 'COMMENT', 'STATUS_CHANGE', 'ASSIGNMENT', 'ATTACHMENT'
+  content     String
+  metadata    String?  // JSON for oldStatus, newStatus, attachmentUrl, etc.
+  
+  createdAt   DateTime @default(now())
+
+  // Relations
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@map("task_activities")
+}
+
+model TaskChecklistItem {
+  id                String    @id @default(uuid())
+  taskId            String
+  text              String
+  completed         Boolean   @default(false)
+  completedAt       DateTime?
+  completedByUserId String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  task              Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  completedByUser   User?     @relation(fields: [completedByUserId], references: [id])
+
+  @@map("task_checklist_items")
+}
+
+model TaskAttachment {
+  id          String   @id @default(uuid())
+  taskId      String
+  userId      String
+  fileName    String
+  fileUrl     String
+  fileSize    Int
+  mimeType    String
+  
+  createdAt   DateTime @default(now())
+
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@map("task_attachments")
+}
